@@ -12,10 +12,12 @@
 * [6. Playwright環境構築](#6-playwright環境構築)
 * [7. 開発時のルール](#7-開発時のルール)
 * [8. PC再起動後の利用方法](#8-pc再起動後の利用方法)
-* [9. 開発終了時](#9-開発終了時)
-* [10. アンインストール方法](#10-アンインストール方法)
-* [11. よく使うコマンド一覧](#11-よく使うコマンド一覧)
-* [12. トラブルシューティング](#12-トラブルシューティング)
+* [9. WindowsとUbuntu間のファイル連携](#9-windowsとubuntu間のファイル連携)
+* [10. Docker内ファイルをWindowsから確認する方法](#10-docker内ファイルをwindowsから確認する方法)
+* [11. 開発終了時](#11-開発終了時)
+* [12. アンインストール方法](#12-アンインストール方法)
+* [13. よく使うコマンド一覧](#13-よく使うコマンド一覧)
+* [14. トラブルシューティング](#14-トラブルシューティング)
 
 ---
 
@@ -366,7 +368,214 @@ npx playwright test
 
 ---
 
-# 9. 開発終了時
+# 9. WindowsとUbuntu間のファイル連携
+
+## 9.1 Ubuntu側のファイルをWindowsエクスプローラーで開く
+
+Ubuntuで現在のディレクトリをWindowsエクスプローラーで開く場合
+
+```bash
+explorer.exe .
+```
+
+ホームディレクトリを開く例
+
+```bash
+explorer.exe ~
+```
+
+補足
+
+* Ubuntu側のファイルはWindowsから `\\wsl$` 経由で参照できる
+* 例: `\\wsl$\Ubuntu-24.04\home\hogehoge\workspace`
+* 開発用プロジェクト本体は引き続きUbuntu側に置くことを推奨
+
+---
+
+## 9.2 Windows側のファイルをUbuntuから参照する
+
+WindowsのCドライブはUbuntuから以下で参照できる
+
+```bash
+cd /mnt/c
+ls
+```
+
+ユーザーフォルダの例
+
+```bash
+cd /mnt/c/Users/hogehoge/Documents
+```
+
+補足
+
+* `/mnt/c` は Windows の `C:\` に対応する
+* `D:` ドライブは `/mnt/d` のように参照できる
+* Windows側の設定ファイルやダウンロードファイルを一時的に参照したい場合に便利
+
+---
+
+## 9.3 WindowsからUbuntuへファイルをコピーする
+
+方法1: エクスプローラーでコピー
+
+Ubuntuで対象フォルダを開く
+
+```bash
+explorer.exe ~/workspace
+```
+
+開いたエクスプローラーへドラッグ&ドロップでコピーする。
+
+方法2: Ubuntu上でコピー
+
+```bash
+cp /mnt/c/Users/hogehoge/Downloads/sample.txt ~/workspace/
+```
+
+ディレクトリごとコピーする場合
+
+```bash
+cp -r /mnt/c/Users/hogehoge/Downloads/my-folder ~/workspace/
+```
+
+---
+
+## 9.4 UbuntuからWindowsへファイルをコピーする
+
+Ubuntu上でWindowsのデスクトップへコピーする例
+
+```bash
+cp ~/workspace/sample.txt /mnt/c/Users/hogehoge/Desktop/
+```
+
+ディレクトリごとコピーする例
+
+```bash
+cp -r ~/workspace/my-folder /mnt/c/Users/hogehoge/Desktop/
+```
+
+---
+
+## 9.5 どちらにファイルを置くべきか
+
+基本方針
+
+* ソースコードやGitリポジトリは Ubuntu 側に置く
+* Excel、PDF、画像、配布用ファイルなどは必要に応じて Windows 側にも保存してよい
+* Node.jsプロジェクトを `C:` 配下で直接開発するのは非推奨
+
+理由
+
+* ファイル監視が不安定になることがある
+* `npm install` や `pnpm install` が遅くなりやすい
+* Playwright や各種ビルドツールの動作が不安定になる場合がある
+
+---
+
+# 10. Docker内ファイルをWindowsから確認する方法
+
+## 10.1 基本方針
+
+Docker内の TypeScript ファイルなどを Windows から確認したい場合は、コンテナ内だけにファイルを閉じ込めず、ホスト側のディレクトリをマウントして使う。
+
+推奨
+
+* プロジェクト本体は Ubuntu 側の `~/workspace` 配下に置く
+* Docker コンテナには bind mount でそのディレクトリを渡す
+* Windows からは `\\wsl$` または VS Code で確認する
+
+例
+
+```text
+/home/hogehoge/workspace/my-project
+```
+
+---
+
+## 10.2 Windowsから確認する方法
+
+### 方法1: Windowsエクスプローラーで開く
+
+Ubuntu側でプロジェクトディレクトリへ移動して実行
+
+```bash
+cd ~/workspace/my-project
+explorer.exe .
+```
+
+またはWindowsエクスプローラーで直接以下を開く
+
+```text
+\\wsl$\Ubuntu-24.04\home\hogehoge\workspace\my-project
+```
+
+---
+
+### 方法2: VS Codeで開く
+
+Ubuntu側で
+
+```bash
+cd ~/workspace/my-project
+code .
+```
+
+これで Windows の VS Code から WSL 側のファイルをそのまま確認・編集できる。
+
+---
+
+## 10.3 Dockerでbind mountする例
+
+`docker compose` の例
+
+```yaml
+services:
+  app:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: npm run dev
+```
+
+この場合
+
+* Ubuntu側の `~/workspace/my-project` が実体ファイル
+* Docker内では `/app` として見える
+* Windowsからは `\\wsl$\Ubuntu-24.04\home\hogehoge\workspace\my-project` として確認できる
+
+---
+
+## 10.4 コンテナ内だけにあるファイルを取り出す方法
+
+もしファイルが bind mount されておらず、コンテナ内にしか存在しない場合は `docker cp` を使う。
+
+ディレクトリごとコピーする例
+
+```bash
+docker cp <container_name>:/app/src ./tmp-src
+```
+
+ファイル単体をコピーする例
+
+```bash
+docker cp <container_name>:/app/src/index.ts ./index.ts
+```
+
+コピー後は Windows からそのファイルを確認できる。
+
+---
+
+## 10.5 注意点
+
+* 開発用ソースコードは Windows 側の `C:` 配下ではなく Ubuntu 側で管理するのが推奨
+* `node_modules` を Windows 側から直接操作するのは非推奨
+* 普段の確認は `\\wsl$` または VS Code を使い、`docker cp` は一時的な取り出し用途として使うと分かりやすい
+
+---
+
+# 11. 開発終了時
 
 ## Ubuntuシェル終了
 
@@ -399,7 +608,7 @@ Stopped
 
 ---
 
-# 10. アンインストール方法
+# 12. アンインストール方法
 
 ## Ubuntuのみ削除
 
@@ -444,7 +653,7 @@ Windows再起動
 
 ---
 
-# 11. よく使うコマンド一覧
+# 13. よく使うコマンド一覧
 
 ## WSL起動
 
@@ -507,8 +716,26 @@ cd ~
 cd ~/workspace
 ```
 
+## Windowsエクスプローラーで開く
 
-# 12. トラブルシューティング
+```bash
+explorer.exe .
+```
+
+## Windows側のファイルへ移動
+
+```bash
+cd /mnt/c/Users/hogehoge/Downloads
+```
+
+## Dockerコンテナからファイルコピー
+
+```bash
+docker cp <container_name>:/app/src/index.ts ./index.ts
+```
+
+
+# 14. トラブルシューティング
 
 ## ケース1: Ubuntuをインストールしたのに `wsl -l -v` に何も表示されない
 
